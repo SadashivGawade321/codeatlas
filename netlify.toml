@@ -2,3 +2,6 @@
   base = "frontend/"
   publish = "dist/"
   command = "npm run build"
+
+[build.environment]
+  VITE_API_URL = "https://codeatlas-backend-8zkc.onrender.com"
