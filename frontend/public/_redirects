@@ -1,1 +1,3 @@
-/* /index.html 200
+/api/*  https://codeatlas-backend-8zkc.onrender.com/api/:splat  200!
+/socket.io/*  https://codeatlas-backend-8zkc.onrender.com/socket.io/:splat  200!
+/*  /index.html  200
