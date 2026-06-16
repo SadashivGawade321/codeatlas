@@ -13,11 +13,21 @@ const usersRoutes = require('./routes/users');
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = ['https://codeatlas181.netlify.app', 'http://localhost:5173'];
+
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: {
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true
+  }
 });
 
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Track server start time globally
