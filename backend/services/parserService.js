@@ -182,49 +182,86 @@ async function analyzeRepo(repoUrl) {
 function generateMockAnalysis(owner, repo, repoUrl) {
   const nodes = [
     { id: 'root', label: repo, type: 'folder', data: { path: '/' } },
-    { id: 'src', label: 'src', type: 'folder', data: { path: '/src' } },
-    { id: 'src/components', label: 'components', type: 'folder', data: { path: '/src/components' } },
-    { id: 'src/components/Button.jsx', label: 'Button.jsx', type: 'file', data: { path: '/src/components/Button.jsx', language: 'JavaScript' } },
-    { id: 'src/components/Header.jsx', label: 'Header.jsx', type: 'file', data: { path: '/src/components/Header.jsx', language: 'JavaScript' } },
-    { id: 'src/App.jsx', label: 'App.jsx', type: 'file', data: { path: '/src/App.jsx', language: 'JavaScript' } },
-    { id: 'src/main.jsx', label: 'main.jsx', type: 'file', data: { path: '/src/main.jsx', language: 'JavaScript' } },
+    { id: 'frontend', label: 'frontend', type: 'folder', data: { path: '/frontend' } },
+    { id: 'index.html', label: 'index.html', type: 'file', data: { path: '/frontend/index.html', language: 'HTML', size: 1024 } },
+    { id: 'auth.html', label: 'auth.html', type: 'file', data: { path: '/frontend/auth.html', language: 'HTML', size: 800 } },
+    { id: 'styles.css', label: 'styles.css', type: 'file', data: { path: '/frontend/styles.css', language: 'CSS', size: 2048 } },
+    { id: 'app.js', label: 'app.js', type: 'file', data: { path: '/frontend/app.js', language: 'JavaScript', size: 4096 } },
+    
     { id: 'backend', label: 'backend', type: 'folder', data: { path: '/backend' } },
-    { id: 'backend/server.js', label: 'server.js', type: 'file', data: { path: '/backend/server.js', language: 'JavaScript' } },
-    { id: 'backend/db.js', label: 'db.js', type: 'db', data: { path: '/backend/db.js', language: 'JavaScript' } },
-    { id: 'package.json', label: 'package.json', type: 'file', data: { path: '/package.json', language: 'JSON' } },
+    { id: 'main.py', label: 'main.py', type: 'file', data: { path: '/backend/main.py', language: 'Python', size: 3000 } },
+    { id: 'models.py', label: 'models.py', type: 'file', data: { path: '/backend/models.py', language: 'Python', size: 2500 } },
+    { id: 'auth.py', label: 'auth.py', type: 'file', data: { path: '/backend/auth.py', language: 'Python', size: 1800 } },
+    { id: 'backend/__init__.py', label: '__init__.py', type: 'file', data: { path: '/backend/__init__.py', language: 'Python', size: 0 } },
+    
+    { id: 'core', label: 'core', type: 'folder', data: { path: '/backend/core' } },
+    { id: 'ai_engine.py', label: 'ai_engine.py', type: 'file', data: { path: '/backend/core/ai_engine.py', language: 'Python', size: 5000 } },
+    { id: 'step_generator.py', label: 'step_generator.py', type: 'file', data: { path: '/backend/core/step_generator.py', language: 'Python', size: 4200 } },
+    { id: 'ast_parser.py', label: 'ast_parser.py', type: 'file', data: { path: '/backend/core/ast_parser.py', language: 'Python', size: 3800 } },
+    { id: 'core/__init__.py', label: '__init__.py', type: 'file', data: { path: '/backend/core/__init__.py', language: 'Python', size: 0 } },
+
+    { id: 'README.md', label: 'README.md', type: 'file', data: { path: '/README.md', language: 'Markdown', size: 1500 } },
+    { id: '.env.example', label: '.env.example', type: 'file', data: { path: '/.env.example', language: 'Text', size: 200 } },
+    { id: '.gitignore', label: '.gitignore', type: 'file', data: { path: '/.gitignore', language: 'Text', size: 300 } },
+    { id: 'requirements.txt', label: 'requirements.txt', type: 'file', data: { path: '/requirements.txt', language: 'Text', size: 150 } },
+    { id: 'start.bat', label: 'start.bat', type: 'file', data: { path: '/start.bat', language: 'Shell', size: 400 } },
+    { id: 'vercel.json', label: 'vercel.json', type: 'file', data: { path: '/vercel.json', language: 'JSON', size: 250 } }
   ];
 
   const edges = [
-    { source: 'root', target: 'src', label: 'contains' },
+    { source: 'root', target: 'frontend', label: 'contains' },
     { source: 'root', target: 'backend', label: 'contains' },
-    { source: 'root', target: 'package.json', label: 'contains' },
-    { source: 'src', target: 'src/components', label: 'contains' },
-    { source: 'src', target: 'src/App.jsx', label: 'contains' },
-    { source: 'src', target: 'src/main.jsx', label: 'contains' },
-    { source: 'src/components', target: 'src/components/Button.jsx', label: 'contains' },
-    { source: 'src/components', target: 'src/components/Header.jsx', label: 'contains' },
-    { source: 'backend', target: 'backend/server.js', label: 'contains' },
-    { source: 'backend', target: 'backend/db.js', label: 'contains' },
-    // Code dependency edges
-    { source: 'src/main.jsx', target: 'src/App.jsx', label: 'imports' },
-    { source: 'src/App.jsx', target: 'src/components/Header.jsx', label: 'imports' },
-    { source: 'src/App.jsx', target: 'src/components/Button.jsx', label: 'imports' },
-    { source: 'backend/server.js', target: 'backend/db.js', label: 'imports' },
+    { source: 'root', target: 'README.md', label: 'contains' },
+    { source: 'root', target: '.env.example', label: 'contains' },
+    { source: 'root', target: '.gitignore', label: 'contains' },
+    { source: 'root', target: 'requirements.txt', label: 'contains' },
+    { source: 'root', target: 'start.bat', label: 'contains' },
+    { source: 'root', target: 'vercel.json', label: 'contains' },
+    
+    { source: 'frontend', target: 'index.html', label: 'contains' },
+    { source: 'frontend', target: 'auth.html', label: 'contains' },
+    { source: 'frontend', target: 'styles.css', label: 'contains' },
+    { source: 'frontend', target: 'app.js', label: 'contains' },
+
+    { source: 'backend', target: 'main.py', label: 'contains' },
+    { source: 'backend', target: 'models.py', label: 'contains' },
+    { source: 'backend', target: 'auth.py', label: 'contains' },
+    { source: 'backend', target: 'backend/__init__.py', label: 'contains' },
+    { source: 'backend', target: 'core', label: 'contains' },
+
+    { source: 'core', target: 'ai_engine.py', label: 'contains' },
+    { source: 'core', target: 'step_generator.py', label: 'contains' },
+    { source: 'core', target: 'ast_parser.py', label: 'contains' },
+    { source: 'core', target: 'core/__init__.py', label: 'contains' },
+
+    // Dependencies
+    { source: 'index.html', target: 'app.js', label: 'imports' },
+    { source: 'index.html', target: 'styles.css', label: 'imports' },
+    { source: 'auth.html', target: 'app.js', label: 'imports' },
+    { source: 'auth.html', target: 'styles.css', label: 'imports' },
+    
+    { source: 'main.py', target: 'auth.py', label: 'imports' },
+    { source: 'main.py', target: 'models.py', label: 'imports' },
+    { source: 'main.py', target: 'core', label: 'imports' },
+    { source: 'auth.py', target: 'models.py', label: 'imports' },
+    
+    { source: 'ai_engine.py', target: 'ast_parser.py', label: 'imports' },
+    { source: 'step_generator.py', target: 'ai_engine.py', label: 'imports' },
+    { source: 'step_generator.py', target: 'ast_parser.py', label: 'imports' }
   ];
 
   return {
     nodes,
     edges,
-    fileCount: 8,
-    healthScore: 'A',
-    languageBreakdown: { 'JavaScript': 80, 'JSON': 20 },
-    securityWarnings: [
-      { type: 'Possible Hardcoded Secret', file: 'backend/server.js', risk: 'High' }
-    ],
+    fileCount: 21,
+    healthScore: 'A+',
+    languageBreakdown: { 'Python': 60, 'JavaScript': 15, 'HTML': 15, 'CSS': 10 },
+    securityWarnings: [],
     designPatterns: [
-      { pattern: 'Singleton', file: 'backend/db.js' }
+      { pattern: 'MVC Pattern', file: 'backend/main.py' },
+      { pattern: 'Factory', file: 'backend/core/ai_engine.py' }
     ],
-    dbConnections: ['MongoDB']
+    dbConnections: ['sqlite://']
   };
 }
 
