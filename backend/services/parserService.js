@@ -5,15 +5,20 @@ const walk = require('acorn-walk');
 // Simple helper to fetch github repository files using the Git Trees API
 async function fetchRepoTree(owner, repo) {
   try {
+    const headers = { 'User-Agent': 'CodeAtlas-App' };
+    if (process.env.GITHUB_TOKEN) {
+      headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+    }
+
     // Try to get default branch first
-    const repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { timeout: 3000 });
+    const repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers, timeout: 8000 });
     const defaultBranch = repoInfo.data.default_branch || 'main';
 
     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
-    const response = await axios.get(treeUrl, { timeout: 3000 });
+    const response = await axios.get(treeUrl, { headers, timeout: 15000 });
     return { files: response.data.tree, defaultBranch };
   } catch (error) {
-    console.error('GitHub API error:', error.message);
+    console.error(`GitHub API error (${error.response?.status || error.code}):`, error.message);
     return null;
   }
 }
