@@ -4,4 +4,24 @@
   command = "npm run build"
 
 [build.environment]
-  VITE_API_URL = "https://codeatlas-backend-8zkc.onrender.com"
+  VITE_API_URL = ""
+
+# Proxy ALL /api/* requests to Render backend (bypasses CORS entirely!)
+[[redirects]]
+  from = "/api/*"
+  to = "https://codeatlas-backend-8zkc.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# Proxy Socket.io requests to Render backend
+[[redirects]]
+  from = "/socket.io/*"
+  to = "https://codeatlas-backend-8zkc.onrender.com/socket.io/:splat"
+  status = 200
+  force = true
+
+# SPA fallback - must be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
