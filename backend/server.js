@@ -16,20 +16,7 @@ const server = http.createServer(app);
 const allowedOrigins = ['https://codeatlas181.netlify.app', 'http://localhost:5173'];
 
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-  }
-});
-
-// Handle ALL preflight OPTIONS requests explicitly before anything else
-app.options('*', (req, res) => {
-  res.set({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-  });
-  res.sendStatus(204);
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 app.use(cors());
