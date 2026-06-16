@@ -17,17 +17,22 @@ const allowedOrigins = ['https://codeatlas181.netlify.app', 'http://localhost:51
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
   }
 });
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true
-}));
+// Handle ALL preflight OPTIONS requests explicitly before anything else
+app.options('*', (req, res) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  });
+  res.sendStatus(204);
+});
+
+app.use(cors());
 app.use(express.json());
 
 // Track server start time globally
@@ -116,6 +121,17 @@ io.on('connection', (socket) => {
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+// Global error handler — prevents server crashes on Render
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.message);
+  res.status(500).json({ message: 'Internal server error' });
+});
+
+// Handle unhandled promise rejections to prevent crashes
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
