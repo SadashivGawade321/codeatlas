@@ -11,11 +11,11 @@ async function fetchRepoTree(owner, repo) {
     }
 
     // Try to get default branch first
-    const repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers, timeout: 8000 });
+    const repoInfo = await axios.get(`https://api.github.com/repos/${owner}/${repo}`, { headers, timeout: 3000 });
     const defaultBranch = repoInfo.data.default_branch || 'main';
 
     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
-    const response = await axios.get(treeUrl, { headers, timeout: 15000 });
+    const response = await axios.get(treeUrl, { headers, timeout: 5000 });
     return { files: response.data.tree, defaultBranch };
   } catch (error) {
     console.error(`GitHub API error (${error.response?.status || error.code}):`, error.message);
