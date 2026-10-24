@@ -1,8 +1,12 @@
-import { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { io } from 'socket.io-client';
-import { Send, Users, Circle, MessageSquare } from 'lucide-react';
+import {
+  Send, Users, MessageSquare, X, ChevronLeft, Search,
+  Smile, Phone, Video, Clock, CheckCheck, Circle,
+  Minimize2, Maximize2, Sparkles, Mic
+} from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { API_BASE_URL } from '../config';
 

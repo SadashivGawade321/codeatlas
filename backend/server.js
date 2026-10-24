@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 
 const http = require('http');
@@ -104,10 +103,11 @@ io.on('connection', (socket) => {
   });
 });
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+// Database-free operation — in-memory graph cache and client-side persistence
+if (!global.graphs) global.graphs = new Map();
+if (!global.recentScans) global.recentScans = [];
+if (!global.activityLogs) global.activityLogs = [];
+console.log('Running in Free Standalone Mode (Zero-Database)');
 
 // Global error handler — prevents server crashes on Render
 app.use((err, req, res, next) => {

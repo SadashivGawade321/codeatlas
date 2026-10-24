@@ -16,15 +16,20 @@ async function askAI(prompt, context) {
     File list and analysis:
     ${JSON.stringify(context)}
     
-    Answer the user's question clearly, focusing on structure, patterns, security, and dependencies.
+    Guidelines:
+    1. Answer clearly, focusing on structure, patterns, security, and dependencies.
+    2. Whenever the user asks for a flowchart, sequence diagram, architecture map, workflow, or call stack, you MUST generate a valid Mermaid diagram enclosed in \`\`\`mermaid\n...\n\`\`\`.
+    3. Use standard Mermaid syntax like "graph TD" (for flowcharts/trees) or "sequenceDiagram" (for call stacks/workflows) with short node IDs and descriptive labels.
+    
     User Question: "${prompt}"
   `;
 
   // --- GROQ API (Faster) ---
   if (groqKey) {
     try {
+      const groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
       const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-        model: 'llama-3.1-8b-instant',
+        model: groqModel,
         messages: [{ role: 'user', content: fullPrompt }]
       }, {
         headers: {
@@ -78,8 +83,9 @@ async function autoRefactor(fileContent) {
 
   if (groqKey) {
     try {
+      const groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
       const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-        model: 'llama-3.1-8b-instant',
+        model: groqModel,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2
       }, {
@@ -146,8 +152,9 @@ async function aiCodeReview(fileContent) {
   `;
 
   const callGroq = async () => {
+    const groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
     const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-      model: 'llama-3.1-8b-instant',
+      model: groqModel,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.1
     }, {
@@ -179,4 +186,64 @@ async function aiCodeReview(fileContent) {
   }
 }
 
-module.exports = { askAI, autoRefactor, aiCodeReview };
+async function filterGraphByNL(prompt, nodes = []) {
+  const groqKey = process.env.GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
+
+  const conciseNodes = (nodes || []).slice(0, 120).map(n => ({
+    id: n.id,
+    label: n.label,
+    path: n.data?.path || n.path || ''
+  }));
+
+  const systemPrompt = `
+    You are an intelligent code repository graph filtering engine.
+    User Query: "${prompt}"
+
+    Nodes in repository:
+    ${JSON.stringify(conciseNodes)}
+
+    Determine which node IDs best match the user's natural language filter query (e.g., related to authentication, finance, UI, core, utilities, routers, database, or specific features).
+    Return ONLY a single valid JSON object with:
+    {
+      "matchedNodeIds": ["id1", "id2"],
+      "explanation": "Short 1-sentence reason why these match"
+    }
+    No markdown formatting, no other text.
+  `;
+
+  if (groqKey) {
+    try {
+      const groqModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+      const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: groqModel,
+        messages: [{ role: 'user', content: systemPrompt }],
+        temperature: 0.1
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`
+        }
+      });
+      let raw = response.data?.choices?.[0]?.message?.content || '{}';
+      raw = raw.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim();
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn('Groq NL filter failed, falling back to local matching:', err.message);
+    }
+  }
+
+  // Fallback keyword matcher
+  const terms = prompt.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const matched = conciseNodes.filter(n => {
+    const text = `${n.id} ${n.label} ${n.path}`.toLowerCase();
+    return terms.some(t => text.includes(t));
+  }).map(n => n.id);
+
+  return {
+    matchedNodeIds: matched,
+    explanation: `Found ${matched.length} files matching query keywords.`
+  };
+}
+
+module.exports = { askAI, autoRefactor, aiCodeReview, filterGraphByNL };

@@ -1,10 +1,9 @@
-import { useContext } from 'react';
+import { useContext, useState, useRef, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from './context/AuthContext';
 import { useTheme } from './context/ThemeContext';
 
 import Home from './pages/Home';
-import { Login, Signup } from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import RepositoryView from './pages/RepositoryView';
@@ -14,29 +13,9 @@ import GlobalChat from './components/GlobalChat';
 import NotificationBell from './components/NotificationBell';
 import { NotificationProvider } from './context/NotificationContext';
 
-import { Moon, Sun, Code, LogOut, Settings as SettingsIcon, Shield, LayoutDashboard, ChevronDown, User, Users } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { Moon, Sun, Code, Settings as SettingsIcon, Shield, LayoutDashboard, ChevronDown, Users, Sparkles, Compass } from 'lucide-react';
 
-// Protected Route Wrapper
-const ProtectedRoute = ({ children, adminOnly = false }) => {
-  const { user, loading } = useContext(AuthContext);
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--ca-bg)', color: 'var(--ca-accent)' }}>
-      <div className="text-center">
-        <span className="h-8 w-8 animate-spin rounded-full border-2 inline-block mb-4"
-          style={{ borderColor: 'var(--ca-accent)', borderTopColor: 'transparent' }} />
-        <div className="font-mono text-sm">LOADING...</div>
-      </div>
-    </div>
-  );
-  if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />;
-
-  return children;
-};
-
-// User dropdown menu
+// User dropdown menu (Free profile)
 const UserMenu = () => {
   const { user, logout } = useContext(AuthContext);
   const [open, setOpen] = useState(false);
@@ -49,7 +28,7 @@ const UserMenu = () => {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const handleLogout = () => {
+  const handleResetSession = () => {
     logout();
     navigate('/');
     setOpen(false);
@@ -58,13 +37,13 @@ const UserMenu = () => {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all hover:scale-105"
         style={{ background: 'var(--ca-surface)', border: '1px solid var(--ca-border)', color: 'var(--ca-text)' }}>
         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold"
           style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)' }}>
-          {user?.name?.[0]?.toUpperCase() || 'U'}
+          {user?.name?.[0]?.toUpperCase() || 'D'}
         </div>
-        <span className="hidden md:block text-sm font-medium max-w-[120px] truncate">{user?.name || 'User'}</span>
+        <span className="hidden md:block text-sm font-medium max-w-[120px] truncate">{user?.name || 'Developer'}</span>
         <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: 'var(--ca-text-secondary)' }} />
       </button>
 
@@ -76,10 +55,10 @@ const UserMenu = () => {
             <div className="text-xs truncate" style={{ color: 'var(--ca-text-secondary)' }}>{user?.email}</div>
             <span className="inline-block mt-1 text-[10px] font-mono uppercase px-2 py-0.5 rounded-full"
               style={{
-                background: user?.role === 'admin' ? 'rgba(255,200,87,0.15)' : 'rgba(56,242,194,0.1)',
-                color: user?.role === 'admin' ? 'var(--ca-warning)' : 'var(--ca-accent)',
+                background: 'rgba(56,242,194,0.1)',
+                color: 'var(--ca-accent)',
               }}>
-              {user?.role}
+              Free Unlocked
             </span>
           </div>
           <div className="py-1">
@@ -90,6 +69,13 @@ const UserMenu = () => {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <LayoutDashboard size={16} /> Dashboard
             </Link>
+            <Link to="/repo/demo" onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+              style={{ color: 'var(--ca-text-secondary)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--ca-surface-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <Compass size={16} /> Demo Architecture
+            </Link>
             <Link to="/network" onClick={() => setOpen(false)}
               className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
               style={{ color: 'var(--ca-text-secondary)' }}
@@ -97,30 +83,28 @@ const UserMenu = () => {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <Users size={16} /> Network
             </Link>
-            {user?.role === 'admin' && (
-              <Link to="/admin" onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
-                style={{ color: 'var(--ca-text-secondary)' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--ca-surface-hover)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <Shield size={16} /> Admin Panel
-              </Link>
-            )}
+            <Link to="/admin" onClick={() => setOpen(false)}
+              className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
+              style={{ color: 'var(--ca-text-secondary)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--ca-surface-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <Shield size={16} /> System Health
+            </Link>
             <Link to="/settings" onClick={() => setOpen(false)}
               className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors"
               style={{ color: 'var(--ca-text-secondary)' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--ca-surface-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <SettingsIcon size={16} /> Settings
+              <SettingsIcon size={16} /> Preferences
             </Link>
           </div>
           <div style={{ borderTop: '1px solid var(--ca-border)' }}>
-            <button onClick={handleLogout}
+            <button onClick={handleResetSession}
               className="flex items-center gap-3 px-4 py-2.5 text-sm w-full text-left transition-colors"
-              style={{ color: 'var(--ca-danger)' }}
+              style={{ color: 'var(--ca-text-secondary)' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--ca-surface-hover)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <LogOut size={16} /> Logout
+              <Sparkles size={16} /> Reset Profile
             </button>
           </div>
         </div>
@@ -134,12 +118,11 @@ function AppContent() {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const isRepoView = location.pathname.startsWith('/repo/');
-  const isAuthPage = ['/login', '/signup'].includes(location.pathname);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--ca-bg)', color: 'var(--ca-text)' }}>
-      {/* Navbar — hidden on repo view and auth pages */}
-      {!isRepoView && !isAuthPage && (
+      {/* Navbar — hidden on repo view */}
+      {!isRepoView && (
         <nav className="glass sticky top-0 z-50 flex items-center justify-between px-6 py-3"
           style={{ borderBottom: '1px solid var(--ca-border)' }}>
           <Link to="/" className="flex items-center gap-2.5 group">
@@ -149,7 +132,28 @@ function AppContent() {
             </div>
             <span className="font-mono font-bold text-lg tracking-widest gradient-text">CODEATLAS</span>
           </Link>
+
           <div className="flex gap-3 items-center">
+            {/* Quick Links */}
+            <Link to="/dashboard"
+              className="hidden sm:inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl transition-all hover:scale-105"
+              style={{ color: 'var(--ca-text-secondary)' }}>
+              <LayoutDashboard size={15} /> Dashboard
+            </Link>
+
+            <Link to="/repo/demo"
+              className="hidden sm:inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl transition-all hover:scale-105"
+              style={{ color: 'var(--ca-text-secondary)' }}>
+              <Compass size={15} /> Demo
+            </Link>
+
+            {/* Launch Console Button */}
+            <Link to="/dashboard"
+              className="inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-all hover:scale-105"
+              style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)' }}>
+              <Sparkles size={15} /> Build Map
+            </Link>
+
             {/* Theme Toggle */}
             <button onClick={toggleTheme}
               className="p-2.5 rounded-xl transition-all hover:scale-105"
@@ -158,59 +162,26 @@ function AppContent() {
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
-            {user ? (
-              <>
-                <NotificationBell />
-                <UserMenu />
-              </>
-            ) : (
-              <>
-                <Link to="/login" className="text-sm font-medium px-4 py-2 rounded-xl transition-all hover:scale-105"
-                  style={{ color: 'var(--ca-text-secondary)' }}>
-                  Login
-                </Link>
-                <Link to="/signup"
-                  className="text-sm font-bold px-5 py-2.5 rounded-xl transition-all hover:scale-105"
-                  style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)' }}>
-                  Sign Up
-                </Link>
-              </>
-            )}
+            <NotificationBell />
+            <UserMenu />
           </div>
         </nav>
       )}
 
       <main className="flex-1 flex flex-col min-h-0 relative">
-        {user && <GlobalChat />}
+        <GlobalChat />
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
-            <ProtectedRoute adminOnly>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          } />
-          <Route path="/network" element={
-            <ProtectedRoute>
-              <Network />
-            </ProtectedRoute>
-          } />
-          <Route path="/repo/:id" element={
-            <ProtectedRoute>
-              <RepositoryView />
-            </ProtectedRoute>
-          } />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/repo/:id" element={<RepositoryView />} />
+          <Route path="/network" element={<Network />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+
+          {/* Redirect deprecated auth routes directly to dashboard */}
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/signup" element={<Navigate to="/dashboard" replace />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

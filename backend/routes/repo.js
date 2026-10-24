@@ -1,14 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const RepositoryHistory = require('../models/RepositoryHistory');
-const Graph = require('../models/Graph');
-const { authMiddleware } = require('../middleware/authMiddleware');
+const axios = require('axios');
+const { authMiddleware, optionalAuthMiddleware } = require('../middleware/authMiddleware');
 const parserService = require('../services/parserService');
 const aiService = require('../services/aiService');
 const { logActivity } = require('../middleware/activityLogger');
 
-// Analyze a repository
-router.post('/analyze', authMiddleware, async (req, res) => {
+// In-memory stores for database-free operation
+if (!global.graphs) global.graphs = new Map();
+if (!global.recentScans) global.recentScans = [];
+
+// Analyze a repository (Free, no login/db required)
+router.post('/analyze', optionalAuthMiddleware, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url) return res.status(400).json({ message: 'URL is required' });
@@ -17,32 +20,45 @@ router.post('/analyze', authMiddleware, async (req, res) => {
     const analysis = await parserService.analyzeRepo(url);
 
     const repositoryName = url.split('/').pop()?.replace('.git', '') || 'Unknown Repo';
+    const graphId = 'graph_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
 
-    const graph = new Graph({
-      userId: req.user.id,
+    const graph = {
+      _id: graphId,
+      id: graphId,
       repositoryUrl: url,
+      repositoryName,
       nodes: analysis.nodes,
-      edges: analysis.edges
-    });
-    await graph.save();
+      edges: analysis.edges,
+      healthScore: analysis.healthScore,
+      languageBreakdown: analysis.languageBreakdown,
+      createdAt: new Date().toISOString()
+    };
 
-    const repoHistory = new RepositoryHistory({
-      userId: req.user.id,
+    // Cache graph in memory
+    global.graphs.set(graphId, graph);
+
+    // Save scan to memory list
+    const scanItem = {
+      _id: graphId,
+      graphId,
       repositoryUrl: url,
       repositoryName,
       healthScore: analysis.healthScore,
       languageBreakdown: analysis.languageBreakdown,
-      graphId: graph._id
-    });
-    await repoHistory.save();
+      createdAt: new Date().toISOString(),
+      analysisDate: new Date().toISOString()
+    };
 
-    // Log activity
-    await logActivity(req.user.id, 'analyze_repo', `Analyzed repository: ${url}`, req);
+    // Add to recent scans, keep unique by URL or replace
+    global.recentScans = [scanItem, ...global.recentScans.filter(s => s.repositoryUrl !== url)].slice(0, 50);
+
+    // Activity log
+    await logActivity('free_developer', 'analyze_repo', `Analyzed repository: ${url}`, req);
 
     res.json({
       message: 'Analysis complete',
-      graphId: graph._id,
-      historyId: repoHistory._id,
+      graphId,
+      historyId: graphId,
       analysis: {
         fileCount: analysis.fileCount,
         healthScore: analysis.healthScore,
@@ -59,59 +75,69 @@ router.post('/analyze', authMiddleware, async (req, res) => {
 });
 
 // Chat about a repository
-router.post('/chat/:graphId', authMiddleware, async (req, res) => {
+router.post('/chat/:graphId', optionalAuthMiddleware, async (req, res) => {
   try {
-    const { prompt } = req.body;
-    const graph = await Graph.findById(req.params.graphId);
-    
-    if (!graph) return res.status(404).json({ message: 'Repository context not found' });
+    const { prompt, context: clientContext } = req.body;
+    let context = clientContext || null;
 
-    if (graph.userId.toString() !== req.user.id) {
-      const User = require('../models/User');
-      const owner = await User.findById(graph.userId);
-      if (!owner || !owner.friends.includes(req.user.id)) {
-        return res.status(403).json({ message: 'Access Denied.' });
+    if (req.params.graphId && req.params.graphId !== 'demo') {
+      const graph = global.graphs.get(req.params.graphId);
+      if (graph) {
+        context = {
+          nodes: graph.nodes.map(n => ({ label: n.label, type: n.type, path: n.data?.path })),
+          edges: graph.edges
+        };
       }
     }
 
-    const context = {
-      nodes: graph.nodes.map(n => ({ label: n.label, type: n.type, path: n.data?.path })),
-      edges: graph.edges
-    };
+    if (!context) {
+      context = {
+        summary: 'General repository context',
+        nodes: [{ label: 'Source', type: 'directory' }, { label: 'index.js', type: 'file' }]
+      };
+    }
 
     const answer = await aiService.askAI(prompt, context);
     res.json({ answer });
   } catch (err) {
-    console.error(err);
+    console.error('Chat error:', err);
+    res.status(500).json({ message: err.message || 'Server error' });
+  }
+});
+
+// Natural Language Graph Filtering
+router.post('/filter', optionalAuthMiddleware, async (req, res) => {
+  try {
+    const { query, nodes } = req.body;
+    if (!query) return res.status(400).json({ message: 'Query is required' });
+
+    const result = await aiService.filterGraphByNL(query, nodes || []);
+    res.json(result);
+  } catch (err) {
+    console.error('NL Filter error:', err);
     res.status(500).json({ message: err.message || 'Server error' });
   }
 });
 
 // Auto-Refactor a file
-router.post('/refactor/:graphId', authMiddleware, async (req, res) => {
+router.post('/refactor/:graphId', optionalAuthMiddleware, async (req, res) => {
   try {
-    const { filePath } = req.body;
-    const graph = await Graph.findById(req.params.graphId);
-    
-    if (!graph) return res.status(404).json({ message: 'Repository context not found' });
+    const { filePath, repoUrl } = req.body;
+    const graph = global.graphs.get(req.params.graphId);
+    const targetUrl = (graph && graph.repositoryUrl) || repoUrl;
 
-    if (graph.userId.toString() !== req.user.id) {
-      const User = require('../models/User');
-      const owner = await User.findById(graph.userId);
-      if (!owner || !owner.friends.includes(req.user.id)) {
-        return res.status(403).json({ message: 'Access Denied.' });
-      }
+    if (!targetUrl) {
+      return res.status(400).json({ message: 'Repository URL not found' });
     }
-    
+
     // Parse URL to get owner and repo
-    const parts = graph.repositoryUrl.replace('https://github.com/', '').split('/');
+    const parts = targetUrl.replace('https://github.com/', '').split('/');
     const owner = parts[0];
     const repo = parts[1]?.replace('.git', '');
 
     if (!owner || !repo) return res.status(400).json({ message: 'Invalid repository URL' });
 
-    // Fetch raw file from GitHub (assuming main/master branch for simplicity)
-    const axios = require('axios');
+    // Fetch raw file from GitHub (try main, then master)
     let fileContent = '';
     try {
       const rawRes = await axios.get(`https://raw.githubusercontent.com/${owner}/${repo}/main/${filePath}`);
@@ -128,7 +154,6 @@ router.post('/refactor/:graphId', authMiddleware, async (req, res) => {
     if (!fileContent) return res.status(400).json({ message: 'File is empty' });
 
     const refactoredCode = await aiService.autoRefactor(fileContent);
-    
     res.json({ original: fileContent, refactored: refactoredCode });
   } catch (err) {
     console.error(err);
@@ -136,44 +161,47 @@ router.post('/refactor/:graphId', authMiddleware, async (req, res) => {
   }
 });
 
-// Get user's repository history
-router.get('/history', authMiddleware, async (req, res) => {
+// Get repository history
+router.get('/history', optionalAuthMiddleware, async (req, res) => {
   try {
-    const history = await RepositoryHistory.find({ userId: req.user.id }).sort({ createdAt: -1 });
-    res.json(history);
+    res.json(global.recentScans || []);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Get graph by id — also handles legacy history IDs as a fallback
-router.get('/graph/:id', authMiddleware, async (req, res) => {
+// Get graph by id
+router.get('/graph/:id', optionalAuthMiddleware, async (req, res) => {
   try {
-    await logActivity(req.user.id, 'view_graph', `Viewed graph: ${req.params.id}`, req);
+    await logActivity('free_developer', 'view_graph', `Viewed graph: ${req.params.id}`, req);
 
-    let graph = await Graph.findById(req.params.id);
-    
-    // Fallback: maybe the ID is a RepositoryHistory ID (legacy links)
-    if (!graph) {
-      const RepositoryHistory = require('../models/RepositoryHistory');
-      const history = await RepositoryHistory.findOne({ _id: req.params.id });
-      if (history && history.graphId) {
-        graph = await Graph.findById(history.graphId);
-      }
-    }
-    
-    if (!graph) return res.status(404).json({ message: 'Graph not found. Please re-analyze this repository.' });
-
-    // Access Control: Owner or Friend
-    if (graph.userId.toString() !== req.user.id) {
-      const User = require('../models/User');
-      const owner = await User.findById(graph.userId);
-      if (!owner || !owner.friends.includes(req.user.id)) {
-        return res.status(403).json({ message: 'Access Denied. You must be a collaborator to view this graph.' });
-      }
+    if (global.graphs.has(req.params.id)) {
+      return res.json(global.graphs.get(req.params.id));
     }
 
-    res.json(graph);
+    // Check if ID matches a scan in recentScans
+    const scan = global.recentScans.find(s => s.graphId === req.params.id || s._id === req.params.id);
+    if (scan && scan.repositoryUrl) {
+      // Auto re-analyze on demand
+      try {
+        const analysis = await parserService.analyzeRepo(scan.repositoryUrl);
+        const graph = {
+          _id: req.params.id,
+          id: req.params.id,
+          repositoryUrl: scan.repositoryUrl,
+          repositoryName: scan.repositoryName,
+          nodes: analysis.nodes,
+          edges: analysis.edges,
+          healthScore: analysis.healthScore,
+          languageBreakdown: analysis.languageBreakdown,
+          createdAt: new Date().toISOString()
+        };
+        global.graphs.set(req.params.id, graph);
+        return res.json(graph);
+      } catch (e) {}
+    }
+
+    return res.status(404).json({ message: 'Graph not found in cache' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -181,13 +209,12 @@ router.get('/graph/:id', authMiddleware, async (req, res) => {
 });
 
 // Delete history
-router.delete('/history/:id', authMiddleware, async (req, res) => {
+router.delete('/history/:id', optionalAuthMiddleware, async (req, res) => {
   try {
-    await RepositoryHistory.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    global.recentScans = (global.recentScans || []).filter(item => item._id !== req.params.id && item.graphId !== req.params.id);
+    global.graphs.delete(req.params.id);
 
-    // Log activity
-    await logActivity(req.user.id, 'delete_history', `Deleted history: ${req.params.id}`, req);
-
+    await logActivity('free_developer', 'delete_history', `Deleted history: ${req.params.id}`, req);
     res.json({ message: 'History deleted' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -195,30 +222,20 @@ router.delete('/history/:id', authMiddleware, async (req, res) => {
 });
 
 // AI Code Review for a file
-router.post('/review/:graphId', authMiddleware, async (req, res) => {
+router.post('/review/:graphId', optionalAuthMiddleware, async (req, res) => {
   try {
-    const { filePath } = req.body;
-    const graph = await Graph.findById(req.params.graphId);
-    
-    if (!graph) return res.status(404).json({ message: 'Repository context not found' });
+    const { filePath, repoUrl } = req.body;
+    const graph = global.graphs.get(req.params.graphId);
+    const targetUrl = (graph && graph.repositoryUrl) || repoUrl;
 
-    if (graph.userId.toString() !== req.user.id) {
-      const User = require('../models/User');
-      const owner = await User.findById(graph.userId);
-      if (!owner || !owner.friends.includes(req.user.id)) {
-        return res.status(403).json({ message: 'Access Denied.' });
-      }
-    }
-    
-    // Parse URL to get owner and repo
-    const parts = graph.repositoryUrl.replace('https://github.com/', '').split('/');
+    if (!targetUrl) return res.status(400).json({ message: 'Repository context not found' });
+
+    const parts = targetUrl.replace('https://github.com/', '').split('/');
     const owner = parts[0];
     const repo = parts[1]?.replace('.git', '');
 
     if (!owner || !repo) return res.status(400).json({ message: 'Invalid repository URL' });
 
-    // Fetch raw file from GitHub
-    const axios = require('axios');
     let fileContent = '';
     try {
       const rawRes = await axios.get(`https://raw.githubusercontent.com/${owner}/${repo}/main/${filePath}`);
@@ -235,7 +252,6 @@ router.post('/review/:graphId', authMiddleware, async (req, res) => {
     if (!fileContent) return res.status(400).json({ message: 'File is empty' });
 
     const issues = await aiService.aiCodeReview(typeof fileContent === 'string' ? fileContent : JSON.stringify(fileContent));
-    
     res.json({ issues });
   } catch (err) {
     console.error(err);

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useContext, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Network, Search, RotateCcw, Box, LayoutGrid, ListTree, Share2, GitBranch, ShieldAlert, FileCode2, ChevronRight, ChevronDown, User, Link as LinkIcon, ZoomIn, ZoomOut, Maximize, Target, Menu, X, Activity, Circle, Layers, Code, Play, Settings, Heart, ArrowLeft, MessageSquare, Send, Bot, Keyboard, CheckCircle, Wand2, Download, AlertTriangle, Eye } from 'lucide-react';
+import { Network, Search, RotateCcw, Box, LayoutGrid, ListTree, Share2, GitBranch, ShieldAlert, FileCode2, ChevronRight, ChevronDown, User, Link as LinkIcon, ZoomIn, ZoomOut, Maximize, Target, Menu, X, Activity, Circle, Layers, Code, Play, Settings, Heart, ArrowLeft, MessageSquare, Send, Bot, Keyboard, CheckCircle, Wand2, Download, AlertTriangle, Eye, Sparkles, Workflow } from 'lucide-react';
 import cytoscape from 'cytoscape';
 import { io } from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
 import GlobalChat from '../components/GlobalChat';
+import RepoAIChat from '../components/RepoAIChat';
+import FileWorkflowModal from '../components/FileWorkflowModal';
 import { API_BASE_URL } from '../config';
 
 // --- MOCK DATA GENERATORS ---
@@ -199,6 +201,14 @@ const RepositoryView = () => {
   // Refactor State
   const [refactorState, setRefactorState] = useState({ isOpen: false, loading: false, original: '', refactored: '' });
 
+  // File Workflow & Multi-Hop Blast Radius State
+  const [workflowModalOpen, setWorkflowModalOpen] = useState(false);
+
+  // Natural Language Graph Filter State
+  const [nlQuery, setNlQuery] = useState('');
+  const [nlFilterLoading, setNlFilterLoading] = useState(false);
+  const [activeNLFilter, setActiveNLFilter] = useState(null);
+
   const metrics = useMemo(() => getGraphMetrics(graphData), [graphData]);
   const fileMetrics = useMemo(() => getFileMetrics(selectedFile, graphData, blastRadius), [selectedFile, graphData, blastRadius]);
 
@@ -268,44 +278,123 @@ const RepositoryView = () => {
     cyNode.outgoers().edges().addClass('highlighted-edge');
   };
 
+  // Natural Language Graph Filter Logic
+  const handleNLFilterSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!nlQuery.trim() || !graphData || !cyRef.current) return;
+
+    setNlFilterLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/repo/filter`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          query: nlQuery.trim(),
+          nodes: graphData.nodes
+        })
+      });
+      const data = await res.json();
+      const matchedIds = data.matchedNodeIds || [];
+
+      if (matchedIds.length > 0) {
+        applyGraphFilter(matchedIds, data.explanation);
+      } else {
+        setActiveNLFilter({ matchedCount: 0, explanation: `No matching files found for "${nlQuery}"` });
+      }
+    } catch (err) {
+      // Local fallback keyword filter
+      const terms = nlQuery.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      const matched = graphData.nodes
+        .filter(n => {
+          const str = `${n.id} ${n.label} ${n.data?.path || ''}`.toLowerCase();
+          return terms.some(t => str.includes(t));
+        })
+        .map(n => n.id);
+      applyGraphFilter(matched, `Keyword match for "${nlQuery}"`);
+    } finally {
+      setNlFilterLoading(false);
+    }
+  };
+
+  const applyGraphFilter = (matchedIds, explanation = '') => {
+    if (!cyRef.current) return;
+    const cy = cyRef.current;
+
+    cy.elements().removeClass('highlighted-node highlighted-edge dimmed');
+    cy.elements().addClass('dimmed');
+
+    const matchedEles = [];
+    matchedIds.forEach(id => {
+      const node = cy.getElementById(id);
+      if (node && node.length > 0) {
+        node.removeClass('dimmed').addClass('highlighted-node');
+        matchedEles.push(node);
+      }
+    });
+
+    // Also highlight edges between matched nodes
+    cy.edges().forEach(edge => {
+      if (matchedIds.includes(edge.data('source')) && matchedIds.includes(edge.data('target'))) {
+        edge.removeClass('dimmed').addClass('highlighted-edge');
+        matchedEles.push(edge);
+      }
+    });
+
+    setActiveNLFilter({
+      query: nlQuery,
+      matchedCount: matchedIds.length,
+      explanation: explanation || `Isolated ${matchedIds.length} files matching query`
+    });
+
+    if (matchedEles.length > 0) {
+      const collection = cy.collection(matchedEles);
+      cy.animate({ fit: { eles: collection, padding: 80 }, duration: 600 });
+    }
+  };
+
+  const clearNLFilter = () => {
+    setNlQuery('');
+    setActiveNLFilter(null);
+    if (cyRef.current) {
+      cyRef.current.elements().removeClass('highlighted-node highlighted-edge dimmed');
+      mapControls.reset();
+    }
+  };
+
   // Fetch Data
   useEffect(() => {
     const fetchGraph = async () => {
       try {
-        if (id === 'demo' || !token) {
+        if (id === 'demo') {
           setGraphData(createDemoGraph(id));
           setLoading(false);
           return;
         }
 
-        const res = await fetch(`${API_BASE_URL}/api/repo/graph/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await fetch(`${API_BASE_URL}/api/repo/graph/${id}`);
         
         if (res.ok) {
           const data = await res.json();
           setGraphData(data);
-        } else if (res.status === 403) {
-          setAccessDenied(true);
-          setLoading(false);
-          return;
         } else {
-          console.error('Failed to fetch real graph, falling back to demo.');
+          console.log('Using demo or fallback graph for ID:', id);
           setGraphData(createDemoGraph(id));
         }
       } catch (err) {
-        console.error('Network error, falling back to demo graph:', err);
+        console.warn('Network error, using fallback graph:', err);
         setGraphData(createDemoGraph(id));
       } finally {
         setLoading(false);
       }
     };
     fetchGraph();
-  }, [id, token]);
+  }, [id]);
 
-  // Socket.io Connection
+  // Socket.io Connection (Real-time collaborative cursors)
   useEffect(() => {
-    if (!token || accessDenied) return;
     const newSocket = io(API_BASE_URL);
     setSocket(newSocket);
 
@@ -319,7 +408,7 @@ const RepositoryView = () => {
     });
 
     return () => newSocket.close();
-  }, [id, token, accessDenied]);
+  }, [id]);
 
   // Cytoscape Init
   useEffect(() => {
@@ -557,8 +646,11 @@ const RepositoryView = () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/repo/review/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ filePath: selectedFile.data?.path || selectedFile.label })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filePath: selectedFile.data?.path || selectedFile.label,
+          repoUrl: graphData?.repositoryUrl
+        })
       });
       const data = await res.json();
       if (res.ok) {
@@ -581,8 +673,15 @@ const RepositoryView = () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/repo/chat/${id || 'demo'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ prompt: chatInput }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: chatInput,
+          context: graphData ? {
+            summary: graphData.repositoryName,
+            nodes: graphData.nodes?.slice(0, 50).map(n => ({ label: n.label, type: n.type, path: n.data?.path })),
+            edges: graphData.edges?.slice(0, 50)
+          } : null
+        }),
       });
       const data = await res.json();
       setChatHistory(prev => [...prev, { role: 'system', content: data.answer || 'No response.' }]);
@@ -595,7 +694,7 @@ const RepositoryView = () => {
   };
 
   const handleMouseMove = (e) => {
-    if (!socket || !token || accessDenied) return;
+    if (!socket) return;
     
     // Throttle to avoid flooding the socket
     const now = Date.now();
@@ -607,8 +706,8 @@ const RepositoryView = () => {
       roomId: id,
       x: e.clientX,
       y: e.clientY,
-      color: '#38f2c2', // Could be randomized per user
-      name: 'Collaborator'
+      color: '#38f2c2',
+      name: 'Developer'
     });
   };
 
@@ -620,8 +719,11 @@ const RepositoryView = () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/repo/refactor/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ filePath: selectedFile.data?.path || selectedFile.label })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filePath: selectedFile.data?.path || selectedFile.label,
+          repoUrl: graphData?.repositoryUrl
+        })
       });
       const data = await res.json();
       
@@ -687,6 +789,50 @@ const RepositoryView = () => {
               <RotateCcw size={14} /> Reset View
             </button>
           </div>
+        </div>
+
+        {/* AI Natural Language Graph Filter Bar */}
+        <div className="flex-1 max-w-xl mx-4 pointer-events-auto">
+          <form onSubmit={handleNLFilterSubmit} className="relative flex items-center">
+            <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none text-orange-400">
+              <Sparkles size={16} className={nlFilterLoading ? "animate-spin" : ""} />
+            </div>
+            <input
+              type="text"
+              value={nlQuery}
+              onChange={(e) => setNlQuery(e.target.value)}
+              placeholder='✨ Ask AI to filter graph (e.g. "files connecting to auth", "finance modules")...'
+              className="w-full bg-slate-900/80 backdrop-blur-2xl border border-white/10 hover:border-orange-500/40 focus:border-orange-500/60 rounded-2xl pl-10 pr-24 py-2.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition-all shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+            />
+            <div className="absolute right-2 flex items-center gap-1">
+              {activeNLFilter && (
+                <button
+                  type="button"
+                  onClick={clearNLFilter}
+                  title="Clear Filter"
+                  className="p-1 hover:text-white text-slate-400 text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={nlFilterLoading || !nlQuery.trim()}
+                className="px-3 py-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-mono text-xs font-semibold disabled:opacity-40 hover:opacity-90 transition-opacity shadow-sm"
+              >
+                {nlFilterLoading ? 'Thinking...' : 'Filter'}
+              </button>
+            </div>
+          </form>
+          {activeNLFilter && (
+            <div className="mt-1.5 px-3 py-1 bg-slate-900/90 border border-orange-500/30 rounded-xl text-[11px] font-mono text-slate-300 flex items-center justify-between backdrop-blur-md shadow-lg animate-in fade-in duration-200">
+              <span className="flex items-center gap-1.5 truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="truncate">{activeNLFilter.explanation || `Filtered to ${activeNLFilter.matchedCount} matching files`}</span>
+              </span>
+              <button onClick={clearNLFilter} className="text-orange-400 hover:text-orange-300 ml-2 font-bold text-xs">✕</button>
+            </div>
+          )}
         </div>
 
         <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-3 px-5 flex items-center gap-5 shadow-[0_8px_32px_rgba(0,0,0,0.5)] pointer-events-auto relative">
@@ -937,6 +1083,13 @@ const RepositoryView = () => {
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={() => setWorkflowModalOpen(true)}
+                    className="w-full mt-3 py-2 px-3 rounded-xl bg-gradient-to-r from-rose-500/20 via-orange-500/20 to-amber-500/20 border border-rose-500/30 hover:border-rose-500/50 text-white text-xs font-mono font-medium flex items-center justify-center gap-2 hover:shadow-[0_0_20px_rgba(244,63,94,0.3)] transition-all cursor-pointer"
+                  >
+                    <Workflow size={14} className="text-rose-400" />
+                    <span>Inspect Workflow & Call Stack</span>
+                  </button>
                 </div>
               </div>
 
@@ -1114,59 +1267,31 @@ const RepositoryView = () => {
         </div>
       </div>
 
-      {/* 6. AI Chat Widget */}
-      <div className={`absolute bottom-6 right-6 z-40 flex flex-col items-end pointer-events-none transition-all duration-300 ${chatOpen ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`} style={{ display: chatOpen ? 'flex' : 'none' }}>
-        <div className="w-[380px] bg-slate-900/95 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_12px_48px_rgba(0,0,0,0.7)] overflow-hidden flex flex-col pointer-events-auto h-[480px]">
-          <div className="p-4 bg-gradient-to-r from-orange-500/10 to-rose-500/10 border-b border-white/10 flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-2">
-              <Bot size={18} className="text-orange-400" />
-              <span className="font-mono font-bold text-white text-sm">CodeAtlas AI</span>
-            </div>
-            <button onClick={() => setChatOpen(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-            {chatHistory.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-orange-500/20 text-orange-50 border border-orange-500/30' : 'bg-white/5 text-slate-300 border border-white/5'}`}>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {chatLoading && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl p-3 bg-white/5 border border-white/5 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce"></span>
-                  <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
-                  <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-          <div className="p-3 bg-black/40 border-t border-white/5 shrink-0">
-            <form onSubmit={handleChatSubmit} className="relative">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask about this repo..."
-                className="w-full bg-slate-800/50 border border-white/10 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-200 outline-none focus:border-orange-500/50"
-              />
-              <button type="submit" disabled={chatLoading || !chatInput.trim()} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-orange-400 hover:text-orange-300 disabled:opacity-50 transition-colors">
-                <Send size={16} />
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
+      {/* 6. Professional AI Assistant */}
+      <RepoAIChat
+        repoId={id || 'demo'}
+        repoName={graphData?.repositoryUrl?.split('/').pop()?.replace('.git', '') || (id === 'demo' ? 'braedonsaunders/codeflow' : 'Repository')}
+        selectedFile={selectedFile}
+        onFilterGraph={applyGraphFilter}
+        contextData={graphData ? {
+          nodes: graphData.nodes?.map(n => ({ label: n.label, type: n.type, path: n.data?.path })),
+          edges: graphData.edges
+        } : null}
+      />
 
-      {/* Floating Chat Trigger Button */}
-      <button 
-        onClick={() => setChatOpen(!chatOpen)}
-        className="absolute bottom-6 right-6 z-30 w-14 h-14 rounded-full bg-gradient-to-r from-orange-500 to-rose-500 text-white flex items-center justify-center shadow-[0_8px_32px_rgba(249,115,22,0.4)] hover:scale-105 transition-transform"
-      >
-        {chatOpen ? <X size={24} /> : <MessageSquare size={24} />}
-      </button>
+      {/* 7. File Workflow & Multi-Hop Blast Radius Modal */}
+      <FileWorkflowModal
+        isOpen={workflowModalOpen}
+        onClose={() => setWorkflowModalOpen(false)}
+        file={selectedFile}
+        graphData={graphData}
+        onSelectFile={(nodeId) => {
+          selectGraphNode(nodeId);
+        }}
+        onAskAI={(prompt) => {
+          // You can also link this to auto-open AI chat if desired
+        }}
+      />
 
       {/* Refactor Modal overlay */}
       {refactorState.isOpen && (

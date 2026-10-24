@@ -8,12 +8,18 @@ import { API_BASE_URL } from '../config';
 
 const Dashboard = () => {
   const [repoUrl, setRepoUrl] = useState('');
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem('codeatlas_history');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
 
-  const { token, user } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const { addNotification } = useNotifications();
 
@@ -30,22 +36,32 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setFetching(true);
-      const res = await fetch(`${API_BASE_URL}/api/repo/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API_BASE_URL}/api/repo/history`);
       const data = await res.json();
-      if (res.ok && Array.isArray(data)) setHistory(data);
+      if (res.ok && Array.isArray(data)) {
+        setHistory(prev => {
+          // Merge remote with local history
+          const map = new Map();
+          [...data, ...prev].forEach(item => {
+            if (item && (item._id || item.graphId)) {
+              map.set(item.graphId || item._id, item);
+            }
+          });
+          const merged = Array.from(map.values());
+          localStorage.setItem('codeatlas_history', JSON.stringify(merged));
+          return merged;
+        });
+      }
     } catch {
-      // keep empty
+      // Keep local history
     } finally {
       setFetching(false);
     }
   };
 
   useEffect(() => {
-    if (token) fetchDashboardData();
-    else setFetching(false);
-  }, [token]);
+    fetchDashboardData();
+  }, []);
 
   const handleAnalyze = async (e) => {
     e.preventDefault();
@@ -57,16 +73,35 @@ const Dashboard = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ url: repoUrl }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Analysis failed');
+
+      const repoName = repoUrl.split('/').pop()?.replace('.git', '') || 'Repository';
+      const newScan = {
+        _id: data.graphId,
+        graphId: data.graphId,
+        repositoryUrl: repoUrl,
+        repositoryName: repoName,
+        healthScore: data.analysis?.healthScore || 85,
+        analysisDate: new Date().toISOString(),
+        createdAt: new Date().toISOString()
+      };
+
+      setHistory(prev => {
+        const next = [newScan, ...prev.filter(p => p.repositoryUrl !== repoUrl)];
+        try {
+          localStorage.setItem('codeatlas_history', JSON.stringify(next));
+        } catch (err) {}
+        return next;
+      });
+
       addNotification({
         type: 'analysis',
         title: 'Analysis Complete',
-        message: `${repoUrl.split('/').pop()} analyzed — Health: ${data.analysis?.healthScore || 'N/A'}/100`,
+        message: `${repoName} analyzed — Health: ${data.analysis?.healthScore || 'N/A'}/100`,
       });
       navigate(`/repo/${data.graphId}`);
     } catch (err) {
@@ -83,12 +118,15 @@ const Dashboard = () => {
     try {
       await fetch(`${API_BASE_URL}/api/repo/history/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
       });
-      setHistory((items) => items.filter((item) => item._id !== id));
-    } catch {
-      setHistory((items) => items.filter((item) => item._id !== id));
-    }
+    } catch (err) {}
+    setHistory((items) => {
+      const updated = items.filter((item) => item._id !== id && item.graphId !== id);
+      try {
+        localStorage.setItem('codeatlas_history', JSON.stringify(updated));
+      } catch (err) {}
+      return updated;
+    });
   };
 
   return (

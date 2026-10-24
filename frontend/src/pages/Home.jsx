@@ -255,18 +255,18 @@ const Home = () => {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
-                to="/signup"
+                to="/dashboard"
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-4 font-bold shadow-lg transition-all duration-300 hover:scale-105"
                 style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)', boxShadow: `0 0 34px var(--ca-accent-glow)` }}
               >
-                <Rocket size={19} /> Get Started Free
+                <Rocket size={19} /> Launch Console — Free
               </Link>
               <Link
-                to="/login"
+                to="/repo/demo"
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-4 font-bold transition-all duration-300 hover:scale-105"
                 style={{ border: '1px solid var(--ca-border)', background: 'var(--ca-surface)', color: 'var(--ca-text)' }}
               >
-                <Waypoints size={19} /> Sign In
+                <Waypoints size={19} /> Explore Demo Graph
               </Link>
             </div>
             <div className="grid max-w-2xl grid-cols-3 gap-3 pt-3">
@@ -508,8 +508,8 @@ const Home = () => {
               { title: 'JavaScript Focus', text: 'Parser optimized for JavaScript/Node.js. Python and TypeScript support in development.' },
               { title: 'Data Privacy', text: 'Your code is never stored. We only save the generated graph structure and metadata.' },
               { title: 'Browser Support', text: 'Best experience on Chrome, Firefox, Edge. Safari supported with minor limitations.' },
-              { title: 'Rate Limits', text: 'Free tier allows 10 scans per day. The analysis uses GitHub API under the hood.' },
-              { title: 'Demo Mode', text: 'The app works in demo mode without backend. Connect MongoDB for full features.' },
+              { title: 'Rate Limits', text: 'Free tier allows unlimited architecture mapping. Uses GitHub API under the hood.' },
+              { title: 'Free & Open', text: '100% free to use with zero login, no signup, and no database setup required.' },
             ].map(note => (
               <div key={note.title} className="flex gap-3 items-start">
                 <Check size={18} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--ca-accent)' }} />
@@ -537,18 +537,18 @@ const Home = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                to="/signup"
+                to="/dashboard"
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all duration-300 hover:scale-105"
                 style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)', boxShadow: `0 0 40px var(--ca-accent-glow)` }}
               >
-                <Rocket size={20} /> Start Free — No Credit Card
+                <Rocket size={20} /> Open Console — 100% Free
               </Link>
               <Link
-                to="/login"
+                to="/repo/demo"
                 className="inline-flex items-center justify-center gap-2 rounded-xl px-8 py-4 text-lg font-bold transition-all duration-300"
                 style={{ border: '1px solid var(--ca-border)', color: 'var(--ca-text)' }}
               >
-                Sign In <ArrowRight size={18} />
+                Explore Demo Repo <ArrowRight size={18} />
               </Link>
             </div>
           </motion.div>
@@ -585,9 +585,8 @@ const Home = () => {
             <div>
               <h4 className="font-bold text-sm uppercase tracking-wider mb-4" style={{ color: 'var(--ca-text)' }}>Quick Links</h4>
               <ul className="space-y-2.5">
-                <li><Link to="/login" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>Login</Link></li>
-                <li><Link to="/signup" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>Sign Up</Link></li>
                 <li><Link to="/dashboard" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>Dashboard</Link></li>
+                <li><Link to="/repo/demo" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>Demo Architecture</Link></li>
                 <li><a href="#how-it-works" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>How It Works</a></li>
                 <li><a href="#features" className="text-sm hover:underline" style={{ color: 'var(--ca-text-secondary)' }}>Features</a></li>
               </ul>
