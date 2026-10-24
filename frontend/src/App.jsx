@@ -185,6 +185,21 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+      {/* Global App Footer for Dashboard, Network, Settings & Admin */}
+      {!isRepoView && location.pathname !== '/' && (
+        <footer className="mt-auto px-6 py-4 glass text-xs" style={{ borderTop: '1px solid var(--ca-border)', color: 'var(--ca-text-secondary)' }}>
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">✨</span>
+              <span>"The best way to predict the future is to create it." — <span className="italic">Dream big, write clean code, and never stop building.</span></span>
+            </div>
+            <div className="font-mono">
+              This application is made by <span className="font-extrabold gradient-text">Sadashiv Gawade</span>
+            </div>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

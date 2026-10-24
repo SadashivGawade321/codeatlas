@@ -593,12 +593,44 @@ const Home = () => {
             </div>
           </div>
 
-          <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-4" style={{ borderTop: '1px solid var(--ca-border)' }}>
-            <div className="text-sm" style={{ color: 'var(--ca-text-secondary)' }}>
-              © {new Date().getFullYear()} CodeAtlas. Built with Dedication by <span className="font-bold gradient-text">Sadashiv Gawade</span>
+          {/* Motivational Quote Banner */}
+          <div className="mb-10 p-6 rounded-2xl relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, rgba(56, 242, 194, 0.08) 0%, rgba(124, 247, 165, 0.04) 100%)',
+              border: '1px solid var(--ca-border-glass)',
+              boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)'
+            }}>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(56, 242, 194, 0.15)', color: 'var(--ca-accent)' }}>
+                  <Sparkles size={22} />
+                </div>
+                <div>
+                  <p className="text-base font-semibold italic" style={{ color: 'var(--ca-text)' }}>
+                    "The best way to predict the future is to create it. Write clean code, dream big, and never stop building."
+                  </p>
+                  <p className="text-xs mt-1.5 font-mono tracking-wide" style={{ color: 'var(--ca-text-secondary)' }}>
+                    ✨ Stay curious, embrace challenges, and turn vision into reality.
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs font-mono font-bold px-4 py-2 rounded-xl flex items-center gap-2 whitespace-nowrap"
+                style={{ background: 'var(--ca-accent)', color: 'var(--ca-bg)' }}>
+                <Zap size={14} /> Crafted for Builders
+              </div>
             </div>
-            <div className="flex gap-6">
-              <span className="text-xs" style={{ color: 'var(--ca-text-secondary)' }}>SG</span>
+          </div>
+
+          <div className="pt-8 flex flex-col md:flex-row justify-between items-center gap-4" style={{ borderTop: '1px solid var(--ca-border)' }}>
+            <div className="text-sm text-center md:text-left" style={{ color: 'var(--ca-text-secondary)' }}>
+              © {new Date().getFullYear()} CodeAtlas. This application is proudly made by <span className="font-extrabold gradient-text">Sadashiv Gawade</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono px-3 py-1 rounded-full"
+                style={{ background: 'rgba(56,242,194,0.1)', color: 'var(--ca-accent)', border: '1px solid rgba(56,242,194,0.2)' }}>
+                Made with ❤️ by Sadashiv Gawade
+              </span>
             </div>
           </div>
         </div>
